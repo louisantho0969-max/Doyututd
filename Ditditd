@@ -1,285 +1,138 @@
 -- =============================================
--- INSTALLATEUR COMPLET PANEL TP - UN SEUL FICHIER
+-- PANEL TÉLÉPORTATION JOUEURS - Delta Executor
 -- =============================================
 
-RegisterCommand('installtp', function(source)
-    if source ~= 0 then
-        print("^1[TP-PANEL] ^7Utilise cette commande en console serveur ou avec un admin.")
-        return
-    end
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 
-    local resourceName = "tp-panel"
-    local basePath = GetResourcePath(resourceName)
-
-    if basePath == "" then
-        print("^2[TP-PANEL] Création du dossier " .. resourceName)
-        os.execute("mkdir " .. resourceName)
-        basePath = GetResourcePath(resourceName)
-    end
-
-    -- Création des dossiers
-    os.execute("mkdir -p " .. basePath .. "/html")
-
-    -- ====================== fxmanifest.lua ======================
-    local fx = [[
-fx_version 'cerulean'
-game 'gta5'
-
-author 'Grok'
-description 'Panel Téléportation Joueurs'
-version '1.0.0'
-
-ui_page 'html/index.html'
-
-files {
-    'html/index.html',
-    'html/script.js',
-    'html/style.css'
-}
-
-client_script 'client.lua'
-server_script 'server.lua'
-
-lua54 'yes'
-]]
-    SaveResourceFile(resourceName, "fxmanifest.lua", fx, -1)
-
-    -- ====================== client.lua ======================
-    local client = [[
+local LocalPlayer = Players.LocalPlayer
 local selectedPlayer = nil
 
-RegisterCommand('tppanel', function()
-    if not IsPlayerAdmin() then 
-        TriggerEvent('esx:showNotification', '~r~Tu n\'as pas les droits.')
-        return 
+-- Création du ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TpPanelDelta"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 420, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -250)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 50)
+Title.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+Title.Text = "Panel Téléportation"
+Title.TextColor3 = Color3.new(0,0,0)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local Scrolling = Instance.new("ScrollingFrame")
+Scrolling.Size = UDim2.new(1, -20, 0, 300)
+Scrolling.Position = UDim2.new(0, 10, 0, 60)
+Scrolling.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Scrolling.ScrollBarThickness = 8
+Scrolling.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.Parent = Scrolling
+
+-- Boutons
+local BtnTpTo = Instance.new("TextButton")
+BtnTpTo.Size = UDim2.new(0.48, 0, 0, 50)
+BtnTpTo.Position = UDim2.new(0, 10, 0, 370)
+BtnTpTo.BackgroundColor3 = Color3.fromRGB(0, 102, 255)
+BtnTpTo.Text = "Se téléporter à lui"
+BtnTpTo.TextColor3 = Color3.new(1,1,1)
+BtnTpTo.TextScaled = true
+BtnTpTo.Font = Enum.Font.GothamSemibold
+BtnTpTo.Parent = MainFrame
+
+local BtnBring = Instance.new("TextButton")
+BtnBring.Size = UDim2.new(0.48, 0, 0, 50)
+BtnBring.Position = UDim2.new(0.5, 0, 0, 370)
+BtnBring.BackgroundColor3 = Color3.fromRGB(255, 136, 0)
+BtnBring.Text = "Il se téléporte à moi"
+BtnBring.TextColor3 = Color3.new(1,1,1)
+BtnBring.TextScaled = true
+BtnBring.Font = Enum.Font.GothamSemibold
+BtnBring.Parent = MainFrame
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(1, -20, 0, 40)
+CloseBtn.Position = UDim2.new(0, 10, 0, 430)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseBtn.Text = "Fermer"
+CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.TextScaled = true
+CloseBtn.Parent = MainFrame
+
+-- Fonction pour mettre à jour la liste
+local function UpdatePlayerList()
+    for _, child in pairs(Scrolling:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
     end
-    SendNUIMessage({ action = "open" })
-    SetNuiFocus(true, true)
-end, false)
-
-function IsPlayerAdmin()
-    return true -- Change ici selon ton framework (ESX/QBCore)
-end
-
-RegisterNUICallback('close', function(data, cb)
-    SetNuiFocus(false, false)
-    cb('ok')
-end)
-
-RegisterNUICallback('tpToPlayer', function(data, cb)
-    if not selectedPlayer then return end
-    TriggerServerEvent('tp-panel:tpToPlayer', selectedPlayer)
-    cb('ok')
-end)
-
-RegisterNUICallback('playerTpToMe', function(data, cb)
-    if not selectedPlayer then return end
-    TriggerServerEvent('tp-panel:playerTpToMe', selectedPlayer)
-    cb('ok')
-end)
-
-RegisterNetEvent('tp-panel:updatePlayers')
-AddEventHandler('tp-panel:updatePlayers', function(players)
-    SendNUIMessage({ action = "updatePlayers", players = players })
-end)
-]]
-    SaveResourceFile(resourceName, "client.lua", client, -1)
-
-    -- ====================== server.lua ======================
-    local server = [[
-local playersList = {}
-
-CreateThread(function()
-    while true do
-        playersList = {}
-        for _, playerId in ipairs(GetPlayers()) do
-            table.insert(playersList, {
-                serverId = tonumber(playerId),
-                name = GetPlayerName(playerId)
-            })
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local PlayerBtn = Instance.new("TextButton")
+            PlayerBtn.Size = UDim2.new(1, -10, 0, 50)
+            PlayerBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            PlayerBtn.Text = player.Name .. " (" .. player.UserId .. ")"
+            PlayerBtn.TextColor3 = Color3.new(1,1,1)
+            PlayerBtn.TextScaled = true
+            PlayerBtn.Font = Enum.Font.Gotham
+            PlayerBtn.Parent = Scrolling
+            
+            PlayerBtn.MouseButton1Click:Connect(function()
+                -- Désélectionner tous
+                for _, b in pairs(Scrolling:GetChildren()) do
+                    if b:IsA("TextButton") then
+                        b.BackgroundColor3 = Color3.fromRGB(50,50,50)
+                    end
+                end
+                PlayerBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 136)
+                selectedPlayer = player
+            end)
         end
-        TriggerClientEvent('tp-panel:updatePlayers', -1, playersList)
-        Wait(5000)
     end
-end)
-
-RegisterServerEvent('tp-panel:tpToPlayer')
-AddEventHandler('tp-panel:tpToPlayer', function(targetId)
-    local src = source
-    if not IsPlayerAdmin(src) then return end
-
-    local ped = GetPlayerPed(src)
-    local targetPed = GetPlayerPed(targetId)
-    if DoesEntityExist(targetPed) then
-        local coords = GetEntityCoords(targetPed)
-        SetEntityCoords(ped, coords.x, coords.y, coords.z + 1.0, false, false, false, true)
-    end
-end)
-
-RegisterServerEvent('tp-panel:playerTpToMe')
-AddEventHandler('tp-panel:playerTpToMe', function(targetId)
-    local src = source
-    if not IsPlayerAdmin(src) then return end
-
-    local coords = GetEntityCoords(GetPlayerPed(src))
-    TriggerClientEvent('tp-panel:forceTp', targetId, coords)
-end)
-
-RegisterNetEvent('tp-panel:forceTp')
-AddEventHandler('tp-panel:forceTp', function(coords)
-    local ped = PlayerPedId()
-    SetEntityCoords(ped, coords.x, coords.y, coords.z + 1.0, false, false, false, true)
-end)
-
-function IsPlayerAdmin(src)
-    return true -- Change ici selon ton framework
+    Scrolling.CanvasSize = UDim2.new(0,0,0, UIListLayout.AbsoluteContentSize.Y)
 end
-]]
-    SaveResourceFile(resourceName, "server.lua", server, -1)
 
-    -- ====================== html/index.html ======================
-    local html = [[
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel TP</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Panel Téléportation</h1>
-        <div class="player-list" id="playerList"></div>
-        <div class="buttons">
-            <button id="btnTpTo">Se téléporter à lui</button>
-            <button id="btnTpMe">Il se téléporte à moi</button>
-        </div>
-        <button id="closeBtn">Fermer</button>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>
-]]
-    SaveResourceFile(resourceName, "html/index.html", html, -1)
+-- Mise à jour automatique
+Players.PlayerAdded:Connect(UpdatePlayerList)
+Players.PlayerRemoving:Connect(UpdatePlayerList)
+UpdatePlayerList()
 
-    -- ====================== html/style.css ======================
-    local css = [[
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    font-family: Arial, sans-serif;
-    background: rgba(0,0,0,0.9);
-    color: white;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.container {
-    background: #1e1e1e;
-    padding: 20px;
-    border-radius: 10px;
-    width: 420px;
-    border: 2px solid #00ff88;
-}
-h1 { text-align: center; margin-bottom: 15px; color: #00ff88; }
-.player-list {
-    max-height: 400px;
-    overflow-y: auto;
-    background: #2a2a2a;
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 15px;
-}
-.player-item {
-    padding: 12px;
-    margin: 4px 0;
-    background: #333;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-.player-item:hover { background: #444; }
-.player-item.selected {
-    background: #00ff88;
-    color: black;
-    font-weight: bold;
-}
-.buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-button {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-#btnTpTo { background: #0066ff; color: white; }
-#btnTpTo:hover { background: #3388ff; }
-#btnTpMe { background: #ff8800; color: white; }
-#btnTpMe:hover { background: #ffaa33; }
-#closeBtn { width: 100%; background: #ff3333; color: white; }
-]]
-    SaveResourceFile(resourceName, "html/style.css", css, -1)
+-- Boutons actions
+BtnTpTo.MouseButton1Click:Connect(function()
+    if selectedPlayer and selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = selectedPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end)
 
-    -- ====================== html/script.js ======================
-    local js = [[
-let selectedId = null;
+BtnBring.MouseButton1Click:Connect(function()
+    if selectedPlayer and selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local myHrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if myHrp then
+            selectedPlayer.Character.HumanoidRootPart.CFrame = myHrp.CFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end)
 
-window.addEventListener('message', function(event) {
-    if (event.data.action === "open") {
-        document.body.style.display = 'flex';
-    }
-    if (event.data.action === "updatePlayers") {
-        updatePlayerList(event.data.players);
-    }
-});
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
 
-function updatePlayerList(players) {
-    const container = document.getElementById('playerList');
-    container.innerHTML = '';
-    players.forEach(player => {
-        const div = document.createElement('div');
-        div.className = 'player-item';
-        div.textContent = `${player.name} (${player.serverId})`;
-        div.dataset.id = player.serverId;
-        div.onclick = () => {
-            document.querySelectorAll('.player-item').forEach(e => e.classList.remove('selected'));
-            div.classList.add('selected');
-            selectedId = parseInt(div.dataset.id);
-        };
-        container.appendChild(div);
-    });
-}
-
-document.getElementById('btnTpTo').onclick = () => {
-    if (selectedId) fetch(`https://${GetParentResourceName()}/tpToPlayer`, {
-        method: 'POST', body: JSON.stringify({serverId: selectedId})
-    });
-};
-
-document.getElementById('btnTpMe').onclick = () => {
-    if (selectedId) fetch(`https://${GetParentResourceName()}/playerTpToMe`, {
-        method: 'POST', body: JSON.stringify({serverId: selectedId})
-    });
-};
-
-document.getElementById('closeBtn').onclick = () => {
-    fetch(`https://${GetParentResourceName()}/close`, {method: 'POST'});
-    document.body.style.display = 'none';
-};
-
-document.addEventListener('keydown', e => {
-    if (e.key === "Escape") {
-        fetch(`https://${GetParentResourceName()}/close`, {method: 'POST'});
-        document.body.style.display = 'none';
-    }
-});
-]]
-    SaveResourceFile(resourceName, "html/script.js", js, -1)
-
-    print("^2[TP-PANEL] ^7Installation terminée avec succès !")
-    print("^3Ajoute ceci dans ton server.cfg : ^7ensure tp-panel")
-    print("^5Tape ^7/tppanel ^5en jeu pour ouvrir le panel.")
-
-end, true)
+print("Panel TP chargé ! Clique sur un joueur puis sur les boutons.")

@@ -1,0 +1,285 @@
+-- =============================================
+-- INSTALLATEUR COMPLET PANEL TP - UN SEUL FICHIER
+-- =============================================
+
+RegisterCommand('installtp', function(source)
+    if source ~= 0 then
+        print("^1[TP-PANEL] ^7Utilise cette commande en console serveur ou avec un admin.")
+        return
+    end
+
+    local resourceName = "tp-panel"
+    local basePath = GetResourcePath(resourceName)
+
+    if basePath == "" then
+        print("^2[TP-PANEL] Création du dossier " .. resourceName)
+        os.execute("mkdir " .. resourceName)
+        basePath = GetResourcePath(resourceName)
+    end
+
+    -- Création des dossiers
+    os.execute("mkdir -p " .. basePath .. "/html")
+
+    -- ====================== fxmanifest.lua ======================
+    local fx = [[
+fx_version 'cerulean'
+game 'gta5'
+
+author 'Grok'
+description 'Panel Téléportation Joueurs'
+version '1.0.0'
+
+ui_page 'html/index.html'
+
+files {
+    'html/index.html',
+    'html/script.js',
+    'html/style.css'
+}
+
+client_script 'client.lua'
+server_script 'server.lua'
+
+lua54 'yes'
+]]
+    SaveResourceFile(resourceName, "fxmanifest.lua", fx, -1)
+
+    -- ====================== client.lua ======================
+    local client = [[
+local selectedPlayer = nil
+
+RegisterCommand('tppanel', function()
+    if not IsPlayerAdmin() then 
+        TriggerEvent('esx:showNotification', '~r~Tu n\'as pas les droits.')
+        return 
+    end
+    SendNUIMessage({ action = "open" })
+    SetNuiFocus(true, true)
+end, false)
+
+function IsPlayerAdmin()
+    return true -- Change ici selon ton framework (ESX/QBCore)
+end
+
+RegisterNUICallback('close', function(data, cb)
+    SetNuiFocus(false, false)
+    cb('ok')
+end)
+
+RegisterNUICallback('tpToPlayer', function(data, cb)
+    if not selectedPlayer then return end
+    TriggerServerEvent('tp-panel:tpToPlayer', selectedPlayer)
+    cb('ok')
+end)
+
+RegisterNUICallback('playerTpToMe', function(data, cb)
+    if not selectedPlayer then return end
+    TriggerServerEvent('tp-panel:playerTpToMe', selectedPlayer)
+    cb('ok')
+end)
+
+RegisterNetEvent('tp-panel:updatePlayers')
+AddEventHandler('tp-panel:updatePlayers', function(players)
+    SendNUIMessage({ action = "updatePlayers", players = players })
+end)
+]]
+    SaveResourceFile(resourceName, "client.lua", client, -1)
+
+    -- ====================== server.lua ======================
+    local server = [[
+local playersList = {}
+
+CreateThread(function()
+    while true do
+        playersList = {}
+        for _, playerId in ipairs(GetPlayers()) do
+            table.insert(playersList, {
+                serverId = tonumber(playerId),
+                name = GetPlayerName(playerId)
+            })
+        end
+        TriggerClientEvent('tp-panel:updatePlayers', -1, playersList)
+        Wait(5000)
+    end
+end)
+
+RegisterServerEvent('tp-panel:tpToPlayer')
+AddEventHandler('tp-panel:tpToPlayer', function(targetId)
+    local src = source
+    if not IsPlayerAdmin(src) then return end
+
+    local ped = GetPlayerPed(src)
+    local targetPed = GetPlayerPed(targetId)
+    if DoesEntityExist(targetPed) then
+        local coords = GetEntityCoords(targetPed)
+        SetEntityCoords(ped, coords.x, coords.y, coords.z + 1.0, false, false, false, true)
+    end
+end)
+
+RegisterServerEvent('tp-panel:playerTpToMe')
+AddEventHandler('tp-panel:playerTpToMe', function(targetId)
+    local src = source
+    if not IsPlayerAdmin(src) then return end
+
+    local coords = GetEntityCoords(GetPlayerPed(src))
+    TriggerClientEvent('tp-panel:forceTp', targetId, coords)
+end)
+
+RegisterNetEvent('tp-panel:forceTp')
+AddEventHandler('tp-panel:forceTp', function(coords)
+    local ped = PlayerPedId()
+    SetEntityCoords(ped, coords.x, coords.y, coords.z + 1.0, false, false, false, true)
+end)
+
+function IsPlayerAdmin(src)
+    return true -- Change ici selon ton framework
+end
+]]
+    SaveResourceFile(resourceName, "server.lua", server, -1)
+
+    -- ====================== html/index.html ======================
+    local html = [[
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel TP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Panel Téléportation</h1>
+        <div class="player-list" id="playerList"></div>
+        <div class="buttons">
+            <button id="btnTpTo">Se téléporter à lui</button>
+            <button id="btnTpMe">Il se téléporte à moi</button>
+        </div>
+        <button id="closeBtn">Fermer</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
+]]
+    SaveResourceFile(resourceName, "html/index.html", html, -1)
+
+    -- ====================== html/style.css ======================
+    local css = [[
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: Arial, sans-serif;
+    background: rgba(0,0,0,0.9);
+    color: white;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.container {
+    background: #1e1e1e;
+    padding: 20px;
+    border-radius: 10px;
+    width: 420px;
+    border: 2px solid #00ff88;
+}
+h1 { text-align: center; margin-bottom: 15px; color: #00ff88; }
+.player-list {
+    max-height: 400px;
+    overflow-y: auto;
+    background: #2a2a2a;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+.player-item {
+    padding: 12px;
+    margin: 4px 0;
+    background: #333;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.player-item:hover { background: #444; }
+.player-item.selected {
+    background: #00ff88;
+    color: black;
+    font-weight: bold;
+}
+.buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+button {
+    flex: 1;
+    padding: 12px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+#btnTpTo { background: #0066ff; color: white; }
+#btnTpTo:hover { background: #3388ff; }
+#btnTpMe { background: #ff8800; color: white; }
+#btnTpMe:hover { background: #ffaa33; }
+#closeBtn { width: 100%; background: #ff3333; color: white; }
+]]
+    SaveResourceFile(resourceName, "html/style.css", css, -1)
+
+    -- ====================== html/script.js ======================
+    local js = [[
+let selectedId = null;
+
+window.addEventListener('message', function(event) {
+    if (event.data.action === "open") {
+        document.body.style.display = 'flex';
+    }
+    if (event.data.action === "updatePlayers") {
+        updatePlayerList(event.data.players);
+    }
+});
+
+function updatePlayerList(players) {
+    const container = document.getElementById('playerList');
+    container.innerHTML = '';
+    players.forEach(player => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        div.textContent = `${player.name} (${player.serverId})`;
+        div.dataset.id = player.serverId;
+        div.onclick = () => {
+            document.querySelectorAll('.player-item').forEach(e => e.classList.remove('selected'));
+            div.classList.add('selected');
+            selectedId = parseInt(div.dataset.id);
+        };
+        container.appendChild(div);
+    });
+}
+
+document.getElementById('btnTpTo').onclick = () => {
+    if (selectedId) fetch(`https://${GetParentResourceName()}/tpToPlayer`, {
+        method: 'POST', body: JSON.stringify({serverId: selectedId})
+    });
+};
+
+document.getElementById('btnTpMe').onclick = () => {
+    if (selectedId) fetch(`https://${GetParentResourceName()}/playerTpToMe`, {
+        method: 'POST', body: JSON.stringify({serverId: selectedId})
+    });
+};
+
+document.getElementById('closeBtn').onclick = () => {
+    fetch(`https://${GetParentResourceName()}/close`, {method: 'POST'});
+    document.body.style.display = 'none';
+};
+
+document.addEventListener('keydown', e => {
+    if (e.key === "Escape") {
+        fetch(`https://${GetParentResourceName()}/close`, {method: 'POST'});
+        document.body.style.display = 'none';
+    }
+});
+]]
+    SaveResourceFile(resourceName, "html/script.js", js, -1)
+
+    print("^2[TP-PANEL] ^7Installation terminée avec succès !")
+    print("^3Ajoute ceci dans ton server.cfg : ^7ensure tp-panel")
+    print("^5Tape ^7/tppanel ^5en jeu pour ouvrir le panel.")
+
+end, true)
